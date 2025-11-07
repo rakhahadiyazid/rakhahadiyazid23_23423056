@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AES-GCM Demo - UTS Keamanan Jaringan</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      padding: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 25px;
+      padding: 15px 0;
+    }
+    h1 {
+      color: #1a73e8;
+      font-size: 1.8em;
+    }
+    .note {
+      background: #e8f0fe;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 0.95em;
+      margin: 15px 0;
+      color: #0d47a1;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #202124;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      font-family: inherit;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    #encryptBtn {
+      background: #1a73e8;
+      color: white;
+    }
+    #decryptBtn {
+      background: #34a853;
+      color: white;
+    }
+    .output-box {
+      background: white;
+      border: 1px solid #dadce0;
+      border-radius: 6px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 0.95em;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow: auto;
+    }
+    .error {
+      color: #d93025;
+      font-weight: 600;
+    }
+    .success {
+      color: #1e8e3e;
+    }
+    footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 0.9em;
+      color: #5f6368;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔐 AES-GCM Encryption & Decryption Demo</h1>
+    <div class="note">
+      <strong>Catatan:</strong> Semua proses berjalan di browser Anda. Tidak ada data dikirim ke server.
+    </div>
+  </header>
+
+  <div class="form-group">
+    <label for="password">Password:</label>
+    <input type="password" id="password" placeholder="Masukkan password (contoh: rahasia123)" value="rahasia123">
+  </div>
+
+  <div class="form-group">
+    <label for="inputText">Input Teks (Plaintext atau Ciphertext):</label>
+    <textarea id="inputText" placeholder="Masukkan teks untuk dienkripsi atau ciphertext Base64 untuk didekripsi">Halo UTS Keamanan Jaringan!</textarea>
+  </div>
+
+  <div class="buttons">
+    <button id="encryptBtn" onclick="encrypt()">🔒 Encrypt</button>
+    <button id="decryptBtn" onclick="decrypt()">🔓 Decrypt</button>
+  </div>
+
+  <div class="form-group">
+    <label>Output:</label>
+    <div id="output" class="output-box">Klik Encrypt atau Decrypt untuk melihat hasil.</div>
+  </div>
+
+  <footer>
+    <p>Proyek UTS Keamanan Jaringan & Kriptografi – Implementasi AES-GCM + PBKDF2</p>
+  </footer>
+
+  <script>
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    // Helper: Uint8Array ke string
+    function uint8ArrayToString(array) {
+      return String.fromCharCode.apply(null, array);
+    }
+
+    // Helper: string ke Uint8Array
+    function stringToUint8Array(str) {
+      return new Uint8Array(str.split('').map(c => c.charCodeAt(0)));
+    }
+
+    async function encrypt() {
+      try {
+        const password = document.getElementById("password").value;
+        const plaintext = document.getElementById("inputText").value;
+        if (!password || !plaintext) {
+          throw new Error("Password dan teks tidak boleh kosong.");
+        }
+
+        // Generate salt (16 byte) dan IV/nonce (12 byte)
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+
+        // Derivasi kunci dari password + salt
+        const keyMaterial = await crypto.subtle.importKey(
+          "raw",
+          encoder.encode(password),
+          { name: "PBKDF2" },
+          false,
+          ["deriveKey"]
+        );
+        const key = await crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 100000,
+            hash: "SHA-256"
+          },
+          keyMaterial,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt"]
+        );
+
+        // Enkripsi
+        const encrypted = await crypto.subtle.encrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          encoder.encode(plaintext)
+        );
+
+        // Gabungkan: salt:iv:ciphertext
+        const ciphertext = new Uint8Array(encrypted);
+        const combined = [
+          uint8ArrayToString(salt),
+          uint8ArrayToString(iv),
+          uint8ArrayToString(ciphertext)
+        ].join(':');
+
+        const base64Output = btoa(combined);
+        document.getElementById("output").textContent = base64Output;
+        document.getElementById("output").className = "output-box success";
+      } catch (e) {
+        document.getElementById("output").textContent = "Error: " + (e.message || "Gagal mengenkripsi.");
+        document.getElementById("output").className = "output-box error";
+      }
+    }
+
+    async function decrypt() {
+      try {
+        const password = document.getElementById("password").value;
+        const input = document.getElementById("inputText").value;
+        if (!password || !input) {
+          throw new Error("Password dan ciphertext tidak boleh kosong.");
+        }
+
+        // Decode Base64
+        let combined;
+        try {
+          combined = atob(input);
+        } catch (e) {
+          throw new Error("Format Base64 tidak valid.");
+        }
+
+        const parts = combined.split(':');
+        if (parts.length !== 3) {
+          throw new Error("Format ciphertext salah. Harus berisi salt:iv:ciphertext.");
+        }
+
+        const salt = stringToUint8Array(parts[0]);
+        const iv = stringToUint8Array(parts[1]);
+        const ciphertext = stringToUint8Array(parts[2]);
+
+        // Derivasi kunci ulang
+        const keyMaterial = await crypto.subtle.importKey(
+          "raw",
+          encoder.encode(password),
+          { name: "PBKDF2" },
+          false,
+          ["deriveKey"]
+        );
+        const key = await crypto.subtle.deriveKey(
+          {
+            name: "PBKDF2",
+            salt: salt,
+            iterations: 100000,
+            hash: "SHA-256"
+          },
+          keyMaterial,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["decrypt"]
+        );
+
+        // Dekripsi + verifikasi otomatis
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: iv },
+          key,
+          ciphertext
+        );
+
+        document.getElementById("output").textContent = decoder.decode(decrypted);
+        document.getElementById("output").className = "output-box success";
+      } catch (e) {
+        document.getElementById("output").textContent = "Error: " + (e.message || "Autentikasi gagal (password salah/data rusak).");
+        document.getElementById("output").className = "output-box error";
+      }
+    }
+  </script>
+</body>
+</html>
